@@ -9,6 +9,7 @@ import org.jenkinsci.plugins.workflow.steps.StepDescriptor;
 import org.jenkinsci.plugins.workflow.steps.StepExecution;
 import org.kohsuke.stapler.DataBoundConstructor;
 import org.kohsuke.stapler.DataBoundSetter;
+import jp.am1002.plugins.Messages;
 
 import javax.annotation.CheckForNull;
 import javax.annotation.Nonnull;
@@ -76,7 +77,7 @@ public class FilteredMailStep extends Step {
         @Nonnull
         @Override
         public String getDisplayName() {
-            return "FilteredMail";
+            return Messages.DisplayName();
         }
 
         @Override

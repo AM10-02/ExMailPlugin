@@ -49,9 +49,8 @@ public class FilteredMailConfiguration extends GlobalConfiguration {
         }
 
         if (errors.size() > 0) {
-            return FormValidation.error(String.join(",", errors) + "はメールアドレスのドメインではありません");
+            return FormValidation.error(Messages.GlobalConfig_Error(String.join(",", errors)));
         }
-
 
         return FormValidation.ok();
     }

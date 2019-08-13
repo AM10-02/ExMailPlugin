@@ -4,6 +4,7 @@ import hudson.AbortException;
 import hudson.model.TaskListener;
 import jenkins.plugins.mailer.tasks.MimeMessageBuilder;
 import jp.am1002.plugins.FilteredMailConfiguration;
+import jp.am1002.plugins.Messages;
 import org.apache.commons.lang.StringUtils;
 import org.jenkinsci.plugins.workflow.steps.StepContext;
 import org.jenkinsci.plugins.workflow.steps.SynchronousNonBlockingStepExecution;
@@ -15,7 +16,6 @@ import javax.mail.internet.MimeMessage;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public class FilteredMailStepExecution extends SynchronousNonBlockingStepExecution<Void> {
@@ -36,32 +36,49 @@ public class FilteredMailStepExecution extends SynchronousNonBlockingStepExecuti
     }
 
     private boolean isApproval(String address) {
-        LOGGER.log(Level.INFO, "Test Address => " + address);
         if (StringUtils.isBlank(address)) {
             return true;
         }
 
         String filter = FilteredMailConfiguration.get().getFilter();
-        LOGGER.log(Level.INFO, "Test Filter => " + filter);
         if (StringUtils.isBlank(filter)) {
             return true;
         }
 
         List<String> approvalDomainList = Arrays.asList(filter.split(","));
-        LOGGER.log(Level.INFO, "Test List => " + approvalDomainList);
 
         int index = address.indexOf("@");
         String domain = address.substring(index + 1);
-        LOGGER.log(Level.INFO, "Test Domain => " + domain);
 
         return approvalDomainList.contains(domain);
+    }
+
+    private String getApprovalDomain(Message.RecipientType recipientType, String domains, TaskListener listener) {
+        List<String> approvalList = new ArrayList<>();
+        for (String target : domains.split(",")) {
+            if (isApproval(target)) {
+                approvalList.add(target);
+            } else {
+                listener.getLogger().println(Messages.Execution_Unapproved(target));
+            }
+        }
+
+        String approval = String.join(",", approvalList);
+
+        listener.getLogger().println(
+                StringUtils.isBlank(approval)
+                        ? Messages.Execution_Approval_Empty(recipientType.toString())
+                        : Messages.Execution_Approval(approval, recipientType.toString())
+        );
+
+        return approval;
     }
 
     private MimeMessage buildMimeMessage() throws Exception {
         TaskListener listener = getContext().get(TaskListener.class);
 
         if (StringUtils.isBlank(step.subject) || StringUtils.isBlank(step.body)) {
-            throw new AbortException("Email not sent. All mandatory properties must be supplied ('subject', 'body').");
+            throw new AbortException(Messages.Execution_Abort_Blank());
         }
         MimeMessageBuilder messageBuilder = new MimeMessageBuilder().setListener(getContext().get(TaskListener.class));
 
@@ -80,43 +97,19 @@ public class FilteredMailStepExecution extends SynchronousNonBlockingStepExecuti
             messageBuilder.setReplyTo(step.replyTo);
         }
         if (step.to != null) {
-            List<String> approvalToList = new ArrayList<>();
-            for (String targetTo : step.to.split(",")) {
-                if (isApproval(targetTo)) {
-                    approvalToList.add(targetTo);
-                } else {
-                    allApproval = false;
-                    listener.getLogger().println(targetTo + "は許可されていません");
-                }
-            }
-            listener.getLogger().println(String.join(",", approvalToList) + " To");
-            messageBuilder.addRecipients(String.join(",", approvalToList), Message.RecipientType.TO);
+            String approval = getApprovalDomain(Message.RecipientType.TO, step.to, listener);
+            allApproval &= step.to.equals(approval);
+            messageBuilder.addRecipients(approval, Message.RecipientType.TO);
         }
         if (step.cc != null) {
-            List<String> approvalCcList = new ArrayList<>();
-            for (String targetTo : step.cc.split(",")) {
-                if (isApproval(targetTo)) {
-                    approvalCcList.add(targetTo);
-                } else {
-                    allApproval = false;
-                    listener.getLogger().println(targetTo + "は許可されていません");
-                }
-            }
-            listener.getLogger().println(String.join(",", approvalCcList) + " Cc");
-            messageBuilder.addRecipients(String.join(",", approvalCcList), Message.RecipientType.CC);
+            String approval = getApprovalDomain(Message.RecipientType.CC, step.cc, listener);
+            allApproval &= step.cc.equals(approval);
+            messageBuilder.addRecipients(approval, Message.RecipientType.CC);
         }
         if (step.bcc != null) {
-            List<String> approvalBccList = new ArrayList<>();
-            for (String targetBcc : step.bcc.split(",")) {
-                if (isApproval(targetBcc)) {
-                    approvalBccList.add(targetBcc);
-                } else {
-                    allApproval = false;
-                    listener.getLogger().println(targetBcc + "は許可されていません");
-                }
-            }
-            listener.getLogger().println(String.join(",", approvalBccList) + " Bcc");
-            messageBuilder.addRecipients(String.join(",", approvalBccList), Message.RecipientType.BCC);
+            String approval = getApprovalDomain(Message.RecipientType.BCC, step.bcc, listener);
+            allApproval &= step.bcc.equals(approval);
+            messageBuilder.addRecipients(approval, Message.RecipientType.BCC);
         }
         if (step.getCharset() != null) {
             messageBuilder.setCharset(step.getCharset());
@@ -133,7 +126,7 @@ public class FilteredMailStepExecution extends SynchronousNonBlockingStepExecuti
 
         Address[] allRecipients = message.getAllRecipients();
         if (allRecipients == null || allRecipients.length == 0) {
-            throw new AbortException("Email not sent. No recipients of any kind specified ('to', 'cc', 'bcc').");
+            throw new AbortException(Messages.Execution_Abort_Recipients());
         }
 
         return message;
