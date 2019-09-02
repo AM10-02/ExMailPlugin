@@ -16,17 +16,12 @@ node('master') {
 			]
 		}
 
-		// 並列mvnビルドが動かないようにlockする
-		lock('filtered-email-plugin') {
-			stage('clean') {
-				// mvnのcleanを行います
-				sh "mvn clean"
-			}
-
-			stage('package') {
+		stage('package') {
+			// 並列mvnビルドが動かないようにlockする
+			lock('filtered-email-plugin') {
 				// パッケージを作成します
 				// テストをスキップする場合は、オプションにtrueを指定する
-				sh "mvn package -DskipTests=false"
+				sh "mvn clean package -DskipTests=false"
 			}
 		}
 
