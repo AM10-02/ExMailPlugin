@@ -1,7 +1,4 @@
 node('master') {
-	// currentBuild.resultだとsandboxに引っかかるので別途定義
-	def result = null
-
 	try {
 		stage('setup') {
 			// プラグインをGitHubリポジトリから取得します
@@ -19,21 +16,18 @@ node('master') {
 			]
 		}
 
-		stage('install') {
-			lock(label: 'filtered-email-plugin') {
-				sh "mvn dependency:copy-dependencies"
+		// 並列mvnビルドが動かないようにlockする
+		lock('filtered-email-plugin') {
+			stage('clean') {
+				// mvnのcleanを行います
+				sh "mvn clean"
 			}
-		}
 
-		stage('clean') {
-			// mvnのcleanを行います
-			sh "mvn clean"
-		}
-
-		stage('package') {
-			// パッケージを作成します
-			// ビルドパラメータによって、テストを行うかのオプションを変更します
-			sh "mvn package -DskipTests=true"
+			stage('package') {
+				// パッケージを作成します
+				// テストをスキップする場合は、オプションにtrueを指定する
+				sh "mvn package -DskipTests=false"
+			}
 		}
 
 		stage('archive') {
